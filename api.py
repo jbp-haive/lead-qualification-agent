@@ -63,6 +63,10 @@ def update_pipedrive_person(person_id: int, qualification_result: dict) -> bool:
             PIPEDRIVE_FIELD_KEYS['reasoning']: reasoning
         }
 
+        # Debug: afficher les valeurs envoyées
+        print(f"DEBUG - Payload envoyé à Pipedrive pour personne {person_id}:")
+        print(f"  score={score}, status={status}, confidence={confidence}, action={action}")
+
         # Appel API Pipedrive
         url = f"{PIPEDRIVE_API_URL}/persons/{person_id}"
         headers = {"Content-Type": "application/json"}
