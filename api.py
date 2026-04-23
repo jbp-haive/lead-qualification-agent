@@ -57,7 +57,7 @@ def update_pipedrive_person(person_id: int, qualification_result: dict) -> bool:
         # Préparer la charge utile pour la mise à jour
         # Exclure les valeurs None/vides pour éviter les erreurs Pipedrive
         update_payload = {}
-        if score:
+        if score is not None:  # Important: 0 est une valeur valide!
             update_payload[PIPEDRIVE_FIELD_KEYS['score']] = score
         if status:
             update_payload[PIPEDRIVE_FIELD_KEYS['status']] = status
