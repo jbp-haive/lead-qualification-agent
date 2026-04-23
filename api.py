@@ -6,10 +6,83 @@ HAIVE Lead Qualification Agent - REST API
 import os
 import json
 import sys
+import requests
 from flask import Flask, request, jsonify
 from agent import LeadQualifier
 
 app = Flask(__name__)
+
+# Configuration Pipedrive (depuis variables d'environnement)
+PIPEDRIVE_API_TOKEN = os.environ.get('PIPEDRIVE_API_TOKEN', '')
+PIPEDRIVE_API_URL = "https://api.pipedrive.com/v1"
+
+# Clés des champs personnalisés dans Pipedrive
+# À remplir avec les clés réelles de vos champs (ex: custom_field_123a45b)
+PIPEDRIVE_FIELD_KEYS = {
+    'score': os.environ.get('PIPEDRIVE_FIELD_SCORE', ''),
+    'status': os.environ.get('PIPEDRIVE_FIELD_STATUS', ''),
+    'confidence': os.environ.get('PIPEDRIVE_FIELD_CONFIDENCE', ''),
+    'action': os.environ.get('PIPEDRIVE_FIELD_ACTION', ''),
+    'reasoning': os.environ.get('PIPEDRIVE_FIELD_REASONING', '')
+}
+
+def update_pipedrive_person(person_id: int, qualification_result: dict) -> bool:
+    """
+    Met à jour les champs personnalisés Pipedrive avec les résultats de qualification.
+
+    Args:
+        person_id: ID de la personne dans Pipedrive
+        qualification_result: Résultat de qualification de l'agent
+
+    Returns:
+        True si mise à jour réussie, False sinon
+    """
+    if not PIPEDRIVE_API_TOKEN:
+        print("⚠️  PIPEDRIVE_API_TOKEN non configuré - champs non mis à jour")
+        return False
+
+    if not all(PIPEDRIVE_FIELD_KEYS.values()):
+        print("⚠️  Clés de champs Pipedrive incomplètes - champs non mis à jour")
+        return False
+
+    try:
+        # Extraire les données de qualification
+        qualification = qualification_result.get("qualification", {})
+        score = qualification.get("score", 0)
+        status = qualification.get("status", "")
+        confidence = qualification.get("confidence", "")
+        action = qualification_result.get("recommended_next_action", "")
+        reasoning = qualification_result.get("reasoning_summary", "")
+
+        # Préparer la charge utile pour la mise à jour
+        update_payload = {
+            PIPEDRIVE_FIELD_KEYS['score']: score,
+            PIPEDRIVE_FIELD_KEYS['status']: status,
+            PIPEDRIVE_FIELD_KEYS['confidence']: confidence,
+            PIPEDRIVE_FIELD_KEYS['action']: action,
+            PIPEDRIVE_FIELD_KEYS['reasoning']: reasoning
+        }
+
+        # Appel API Pipedrive
+        url = f"{PIPEDRIVE_API_URL}/persons/{person_id}"
+        headers = {"Content-Type": "application/json"}
+        params = {"api_token": PIPEDRIVE_API_TOKEN}
+
+        response = requests.put(url, json=update_payload, headers=headers, params=params, timeout=10)
+
+        if response.status_code == 200:
+            print(f"✅ Champs Pipedrive mis à jour pour la personne {person_id}")
+            return True
+        else:
+            print(f"❌ Erreur Pipedrive (code {response.status_code}): {response.text}")
+            return False
+
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Erreur lors de la mise à jour Pipedrive: {str(e)}")
+        return False
+    except Exception as e:
+        print(f"❌ Erreur inattendue: {str(e)}")
+        return False
 
 @app.route('/health', methods=['GET'])
 def health():
@@ -85,7 +158,19 @@ def pipedrive_webhook():
 
         qualifier = LeadQualifier()
         result = qualifier.qualify(lead_input)
-        return jsonify({"success": True, "pipedrive_id": pd_data.get("id"), "qualification": result.get("qualification"), "recommended_action": result.get("recommended_next_action"), "full_result": result}), 200
+
+        # Mettre à jour les champs Pipedrive avec les résultats de qualification
+        person_id = pd_data.get("id")
+        if person_id:
+            update_pipedrive_person(person_id, result)
+
+        return jsonify({
+            "success": True,
+            "pipedrive_id": person_id,
+            "qualification": result.get("qualification"),
+            "recommended_action": result.get("recommended_next_action"),
+            "full_result": result
+        }), 200
     except Exception as e:
         return jsonify({"error": "Webhook processing failed", "details": str(e)}), 500
 
