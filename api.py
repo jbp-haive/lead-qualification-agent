@@ -55,17 +55,23 @@ def update_pipedrive_person(person_id: int, qualification_result: dict) -> bool:
         reasoning = qualification_result.get("reasoning_summary", "")
 
         # Préparer la charge utile pour la mise à jour
-        update_payload = {
-            PIPEDRIVE_FIELD_KEYS['score']: score,
-            PIPEDRIVE_FIELD_KEYS['status']: status,
-            PIPEDRIVE_FIELD_KEYS['confidence']: confidence,
-            PIPEDRIVE_FIELD_KEYS['action']: action,
-            PIPEDRIVE_FIELD_KEYS['reasoning']: reasoning
-        }
+        # Exclure les valeurs None/vides pour éviter les erreurs Pipedrive
+        update_payload = {}
+        if score:
+            update_payload[PIPEDRIVE_FIELD_KEYS['score']] = score
+        if status:
+            update_payload[PIPEDRIVE_FIELD_KEYS['status']] = status
+        if confidence:
+            update_payload[PIPEDRIVE_FIELD_KEYS['confidence']] = confidence
+        if action:
+            update_payload[PIPEDRIVE_FIELD_KEYS['action']] = action
+        if reasoning:
+            update_payload[PIPEDRIVE_FIELD_KEYS['reasoning']] = reasoning
 
         # Debug: afficher les valeurs envoyées
         print(f"DEBUG - Payload envoyé à Pipedrive pour personne {person_id}:")
         print(f"  score={score}, status={status}, confidence={confidence}, action={action}")
+        print(f"  Champs réellement envoyés: {list(update_payload.keys())}")
 
         # Appel API Pipedrive
         url = f"{PIPEDRIVE_API_URL}/persons/{person_id}"
