@@ -192,7 +192,9 @@ def main():
     print("\n✅ Server running on http://localhost:5001")
     print("="*60 + "\n")
 
-    app.run(host="0.0.0.0", port=5001, debug=False)
+    import os
+port = int(os.environ.get('PORT', 5001))
+app.run(host="0.0.0.0", port=port, debug=False)
 
 if __name__ == "__main__":
     main()
