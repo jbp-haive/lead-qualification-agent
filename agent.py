@@ -20,8 +20,8 @@ ICP_SECTORS = {
 }
 
 DECISION_ROLES = {
-    "coo": 5, "cto": 3, "ceo": 4, "directeur opérations": 5, "directeur transformation": 5,
-    "directeur réseau": 5, "directrice réseau": 5, "directeur général": 4, "vp operations": 5, "vp": 4,
+    "coo": 5, "cto": 3, "ceo": 4, "directeur opérations": 5, "directrice opérations": 5, "directeur transformation": 5, "directrice transformation": 5,
+    "directeur réseau": 5, "directrice réseau": 5, "directeur général": 4, "directrice général": 4, "directrice générale": 4, "vp operations": 5, "vp": 4,
     "directeur formation": 3, "directrice formation": 3, "responsable régional": 3, "responsable formation": 2, "responsable": 2,
     "consultant": 0, "étudiant": 0, "indépendant": 0, "marketing": 0
 }
