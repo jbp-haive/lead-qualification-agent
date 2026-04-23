@@ -277,7 +277,7 @@ class LeadQualifier:
             },
             "qualification": {
                 "status": "need_more_info",
-                "score": None,
+                "score": 0,
                 "confidence": "LOW",
             },
             "criteria": {},
