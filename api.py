@@ -54,7 +54,35 @@ def pipedrive_webhook():
         if not data:
             return jsonify({"error": "Empty webhook payload"}), 400
         pd_data = data.get("data", {})
-        lead_input = {"name": pd_data.get("name", "Unknown"), "company": pd_data.get("org_id", {}).get("name", "Unknown"), "role": pd_data.get("job_title", "Unknown"), "message": pd_data.get("notes", ""), "email": pd_data.get("email", [{}])[0].get("value", ""), "source": "pipedrive"}
+
+        # Safely extract org_id (handle null/dict case)
+        org_id_obj = pd_data.get("org_id")
+        company = "Unknown"
+        if org_id_obj:
+            if isinstance(org_id_obj, dict):
+                company = org_id_obj.get("name", "Unknown")
+            elif isinstance(org_id_obj, str):
+                company = org_id_obj
+
+        # Safely extract email (handle null/empty list case)
+        email = ""
+        email_list = pd_data.get("email")
+        if email_list and isinstance(email_list, list) and len(email_list) > 0:
+            email_obj = email_list[0]
+            if isinstance(email_obj, dict):
+                email = email_obj.get("value", "")
+            elif isinstance(email_obj, str):
+                email = email_obj
+
+        lead_input = {
+            "name": pd_data.get("name", "Unknown"),
+            "company": company,
+            "role": pd_data.get("job_title", "Unknown"),
+            "message": pd_data.get("notes", ""),
+            "email": email,
+            "source": "pipedrive"
+        }
+
         qualifier = LeadQualifier()
         result = qualifier.qualify(lead_input)
         return jsonify({"success": True, "pipedrive_id": pd_data.get("id"), "qualification": result.get("qualification"), "recommended_action": result.get("recommended_next_action"), "full_result": result}), 200
