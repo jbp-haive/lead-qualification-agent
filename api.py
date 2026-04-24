@@ -98,6 +98,7 @@ def update_pipedrive_person(person_id: int, qualification_result: dict) -> bool:
 def enrich_person_data(person_id: int, partial_data: dict) -> dict:
     """
     Enrichit les données partielles du webhook en récupérant l'intégralité des données de la personne.
+    Inclut un mécanisme de retry si les champs critiques sont null.
 
     Args:
         person_id: ID de la personne dans Pipedrive
@@ -110,35 +111,68 @@ def enrich_person_data(person_id: int, partial_data: dict) -> dict:
         print("⚠️  PIPEDRIVE_API_TOKEN non configuré - impossible d'enrichir les données")
         return partial_data
 
-    try:
-        print(f"\n🔄 Enrichissement des données pour person_id={person_id}")
-        url = f"{PIPEDRIVE_API_URL}/persons/{person_id}"
-        params = {"api_token": PIPEDRIVE_API_TOKEN}
+    max_retries = 3
+    retry_delay = 1  # seconds
 
-        response = requests.get(url, params=params, timeout=10)
+    for attempt in range(max_retries):
+        try:
+            if attempt == 0:
+                print(f"\n🔄 Enrichissement des données pour person_id={person_id}")
+            else:
+                print(f"🔄 Tentative d'enrichissement #{attempt + 1}/{max_retries}")
 
-        if response.status_code == 200:
-            full_data = response.json().get("data", {})
-            print(f"✅ Données complètes récupérées de Pipedrive")
+            url = f"{PIPEDRIVE_API_URL}/persons/{person_id}"
+            params = {"api_token": PIPEDRIVE_API_TOKEN}
 
-            # Fusionner: utiliser les données complètes, garder les données du webhook comme fallback
-            enriched = {**partial_data, **full_data}
+            response = requests.get(url, params=params, timeout=10)
 
-            # Afficher les champs critiques enrichis
-            print(f"  job_title: {enriched.get('job_title', 'N/A')}")
-            print(f"  notes: {enriched.get('notes', 'N/A')[:50] if enriched.get('notes') else 'N/A'}...")
+            if response.status_code == 200:
+                full_data = response.json().get("data", {})
+                print(f"✅ Données récupérées de Pipedrive (tentative {attempt + 1})")
 
-            return enriched
-        else:
-            print(f"⚠️  Erreur API Pipedrive ({response.status_code}): impossible d'enrichir")
+                # Fusionner: utiliser les données complètes, garder les données du webhook comme fallback
+                enriched = {**partial_data, **full_data}
+
+                # Vérifier les champs critiques
+                job_title = enriched.get('job_title')
+                notes = enriched.get('notes')
+
+                print(f"  job_title: {job_title if job_title else 'N/A'}")
+                print(f"  notes: {notes[:50] if notes else 'N/A'}...")
+
+                # Si champs critiques présents, retourner
+                if job_title and notes:
+                    print(f"✅ Données complètes obtenues")
+                    return enriched
+
+                # Si champs manquants et ce n'est pas la dernière tentative, attendre et retry
+                if attempt < max_retries - 1:
+                    print(f"⚠️  Champs critiques manquants, attente {retry_delay}s avant retry...")
+                    time.sleep(retry_delay)
+                    continue
+                else:
+                    print(f"⚠️  Champs critiques toujours manquants après {max_retries} tentatives")
+                    return enriched
+            else:
+                print(f"⚠️  Erreur API Pipedrive ({response.status_code})")
+                if attempt < max_retries - 1:
+                    print(f"   Attente {retry_delay}s avant retry...")
+                    time.sleep(retry_delay)
+                else:
+                    return partial_data
+
+        except requests.exceptions.RequestException as e:
+            print(f"⚠️  Erreur réseau: {str(e)}")
+            if attempt < max_retries - 1:
+                print(f"   Attente {retry_delay}s avant retry...")
+                time.sleep(retry_delay)
+            else:
+                return partial_data
+        except Exception as e:
+            print(f"⚠️  Erreur lors de l'enrichissement: {str(e)}")
             return partial_data
 
-    except requests.exceptions.RequestException as e:
-        print(f"⚠️  Erreur réseau lors de l'enrichissement: {str(e)}")
-        return partial_data
-    except Exception as e:
-        print(f"⚠️  Erreur lors de l'enrichissement: {str(e)}")
-        return partial_data
+    return partial_data
 
 @app.route('/health', methods=['GET'])
 def health():
@@ -194,12 +228,12 @@ def pipedrive_webhook():
         # 🔄 ENRICHISSEMENT: Récupérer les données complètes de Pipedrive
         person_id = pd_data.get("id")
         if person_id:
+            # 🕐 DÉLAI: Attendre que Pipedrive synchronise les données AVANT enrichissement
+            print(f"\n⏳ Attente 3 secondes pour synchronisation Pipedrive...")
+            time.sleep(3)
+
             pd_data = enrich_person_data(person_id, pd_data)
             print(f"\n✅ Données enrichies et fusionnées")
-
-            # 🕐 DÉLAI: Attendre que Pipedrive synchronise les données
-            print(f"\n⏳ Attente 2 secondes pour synchronisation Pipedrive...")
-            time.sleep(2)
         else:
             print(f"\n⚠️  Pas d'ID de personne dans le webhook")
 
