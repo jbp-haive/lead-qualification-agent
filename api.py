@@ -256,11 +256,36 @@ def pipedrive_webhook():
             elif isinstance(email_obj, str):
                 email = email_obj
 
+        # Extract job_title and notes: first try standard fields, then custom_fields
+        job_title = pd_data.get("job_title") or ""
+        notes = pd_data.get("notes") or ""
+
+        # If standard fields are empty, search in custom_fields
+        if not job_title or not notes:
+            custom_fields = pd_data.get("custom_fields", {})
+            if custom_fields:
+                print(f"\n🔍 Recherche dans custom_fields pour job_title et notes")
+                for field_id, field_data in custom_fields.items():
+                    if isinstance(field_data, dict):
+                        field_value = field_data.get("value", "")
+                        field_type = field_data.get("type", "")
+
+                        # Identify job_title: typically short varchar with professional titles
+                        if not job_title and field_type == "varchar" and 5 < len(field_value) < 100:
+                            if any(keyword in field_value.lower() for keyword in ["director", "manager", "chief", "vp", "vice", "president", "head", "lead", "officer"]):
+                                print(f"  ✅ job_title trouvé dans custom field {field_id}: {field_value}")
+                                job_title = field_value
+
+                        # Identify notes: typically longer text
+                        if not notes and field_type == "varchar" and len(field_value) > 100:
+                            print(f"  ✅ notes trouvés dans custom field {field_id}: {field_value[:50]}...")
+                            notes = field_value
+
         lead_input = {
             "name": pd_data.get("name", "Unknown"),
             "company": company,
-            "role": pd_data.get("job_title", "Unknown"),
-            "message": pd_data.get("notes", ""),
+            "role": job_title if job_title else "Unknown",
+            "message": notes,
             "email": email,
             "source": "pipedrive"
         }
