@@ -6,6 +6,7 @@ HAIVE Lead Qualification Agent - REST API
 import os
 import json
 import sys
+import time
 import requests
 from flask import Flask, request, jsonify
 from agent import LeadQualifier
@@ -195,6 +196,10 @@ def pipedrive_webhook():
         if person_id:
             pd_data = enrich_person_data(person_id, pd_data)
             print(f"\n✅ Données enrichies et fusionnées")
+
+            # 🕐 DÉLAI: Attendre que Pipedrive synchronise les données
+            print(f"\n⏳ Attente 2 secondes pour synchronisation Pipedrive...")
+            time.sleep(2)
         else:
             print(f"\n⚠️  Pas d'ID de personne dans le webhook")
 
