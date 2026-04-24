@@ -270,16 +270,20 @@ def pipedrive_webhook():
                         field_value = field_data.get("value", "")
                         field_type = field_data.get("type", "")
 
-                        # Identify job_title: typically short varchar with professional titles
+                        # Identify job_title: typically short varchar with professional titles (EN + FR)
                         if not job_title and field_type == "varchar" and 5 < len(field_value) < 100:
-                            if any(keyword in field_value.lower() for keyword in ["director", "manager", "chief", "vp", "vice", "president", "head", "lead", "officer"]):
+                            job_keywords = ["director", "manager", "chief", "vp", "vice", "president", "head", "lead", "officer",
+                                          "directeur", "manager", "chef", "vice-président", "président", "responsable", "coordinateur", "lead"]
+                            if any(keyword in field_value.lower() for keyword in job_keywords):
                                 print(f"  ✅ job_title trouvé dans custom field {field_id}: {field_value}")
                                 job_title = field_value
 
-                        # Identify notes: typically longer text
-                        if not notes and field_type == "varchar" and len(field_value) > 100:
-                            print(f"  ✅ notes trouvés dans custom field {field_id}: {field_value[:50]}...")
-                            notes = field_value
+                        # Identify notes: typically longer text (reduced threshold to 40 chars for French text)
+                        if not notes and field_type == "varchar" and 40 < len(field_value) < 500:
+                            # Avoid picking up field labels or status messages - prefer actual notes
+                            if not any(keyword in field_value.lower() for keyword in ["icp ", "faible", "low", "high", "email", "phone"]):
+                                print(f"  ✅ notes trouvés dans custom field {field_id}: {field_value[:50]}...")
+                                notes = field_value
 
         lead_input = {
             "name": pd_data.get("name", "Unknown"),
