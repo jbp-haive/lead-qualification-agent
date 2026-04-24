@@ -94,6 +94,51 @@ def update_pipedrive_person(person_id: int, qualification_result: dict) -> bool:
         print(f"❌ Erreur inattendue: {str(e)}")
         return False
 
+def enrich_person_data(person_id: int, partial_data: dict) -> dict:
+    """
+    Enrichit les données partielles du webhook en récupérant l'intégralité des données de la personne.
+
+    Args:
+        person_id: ID de la personne dans Pipedrive
+        partial_data: Données partielles reçues du webhook
+
+    Returns:
+        Dictionnaire fusionné avec les données complètes
+    """
+    if not PIPEDRIVE_API_TOKEN:
+        print("⚠️  PIPEDRIVE_API_TOKEN non configuré - impossible d'enrichir les données")
+        return partial_data
+
+    try:
+        print(f"\n🔄 Enrichissement des données pour person_id={person_id}")
+        url = f"{PIPEDRIVE_API_URL}/persons/{person_id}"
+        params = {"api_token": PIPEDRIVE_API_TOKEN}
+
+        response = requests.get(url, params=params, timeout=10)
+
+        if response.status_code == 200:
+            full_data = response.json().get("data", {})
+            print(f"✅ Données complètes récupérées de Pipedrive")
+
+            # Fusionner: utiliser les données complètes, garder les données du webhook comme fallback
+            enriched = {**partial_data, **full_data}
+
+            # Afficher les champs critiques enrichis
+            print(f"  job_title: {enriched.get('job_title', 'N/A')}")
+            print(f"  notes: {enriched.get('notes', 'N/A')[:50] if enriched.get('notes') else 'N/A'}...")
+
+            return enriched
+        else:
+            print(f"⚠️  Erreur API Pipedrive ({response.status_code}): impossible d'enrichir")
+            return partial_data
+
+    except requests.exceptions.RequestException as e:
+        print(f"⚠️  Erreur réseau lors de l'enrichissement: {str(e)}")
+        return partial_data
+    except Exception as e:
+        print(f"⚠️  Erreur lors de l'enrichissement: {str(e)}")
+        return partial_data
+
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({"status": "ok", "service": "HAIVE Lead Qualifier"})
@@ -145,6 +190,14 @@ def pipedrive_webhook():
         print(f"Payload complet: {json.dumps(pd_data, indent=2, ensure_ascii=False)}")
         print("="*80)
 
+        # 🔄 ENRICHISSEMENT: Récupérer les données complètes de Pipedrive
+        person_id = pd_data.get("id")
+        if person_id:
+            pd_data = enrich_person_data(person_id, pd_data)
+            print(f"\n✅ Données enrichies et fusionnées")
+        else:
+            print(f"\n⚠️  Pas d'ID de personne dans le webhook")
+
         # Safely extract org_id (handle null/dict case)
         org_id_obj = pd_data.get("org_id")
         company = "Unknown"
@@ -187,7 +240,6 @@ def pipedrive_webhook():
         print(f"  action={result['recommended_next_action']}")
 
         # Mettre à jour les champs Pipedrive avec les résultats de qualification
-        person_id = pd_data.get("id")
         if person_id:
             # 🔴 LOGGING: Avant appel Pipedrive
             print(f"\n📞 Appel Pipedrive API pour person_id={person_id}")
