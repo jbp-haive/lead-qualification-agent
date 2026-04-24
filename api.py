@@ -138,6 +138,13 @@ def pipedrive_webhook():
             return jsonify({"error": "Empty webhook payload"}), 400
         pd_data = data.get("data", {})
 
+        # 🔴 LOGGING: Webhook reçu
+        print("\n" + "="*80)
+        print("🔴 WEBHOOK REÇU")
+        print("="*80)
+        print(f"Payload complet: {json.dumps(pd_data, indent=2, ensure_ascii=False)}")
+        print("="*80)
+
         # Safely extract org_id (handle null/dict case)
         org_id_obj = pd_data.get("org_id")
         company = "Unknown"
@@ -166,13 +173,27 @@ def pipedrive_webhook():
             "source": "pipedrive"
         }
 
+        # 🔴 LOGGING: Données envoyées à l'agent
+        print(f"\n📤 Données envoyées à l'agent:")
+        print(json.dumps(lead_input, indent=2, ensure_ascii=False))
+
         qualifier = LeadQualifier()
         result = qualifier.qualify(lead_input)
+
+        # 🔴 LOGGING: Résultat de qualification
+        print(f"\n🎯 Résultat qualification:")
+        print(f"  score={result['qualification']['score']}")
+        print(f"  status={result['qualification']['status']}")
+        print(f"  action={result['recommended_next_action']}")
 
         # Mettre à jour les champs Pipedrive avec les résultats de qualification
         person_id = pd_data.get("id")
         if person_id:
+            # 🔴 LOGGING: Avant appel Pipedrive
+            print(f"\n📞 Appel Pipedrive API pour person_id={person_id}")
             update_pipedrive_person(person_id, result)
+
+        print("\n" + "="*80 + "\n")
 
         return jsonify({
             "success": True,
@@ -182,6 +203,7 @@ def pipedrive_webhook():
             "full_result": result
         }), 200
     except Exception as e:
+        print(f"\n❌ ERREUR: {str(e)}")
         return jsonify({"error": "Webhook processing failed", "details": str(e)}), 500
 
 @app.errorhandler(404)
